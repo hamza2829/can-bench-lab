@@ -1,0 +1,11 @@
+messages:
+  - id: 0x181
+    signals:
+      - {name: position, start: 0, length: 16, minimum: 0, maximum: 1000, unit: mm}
+      - {name: motor, start: 16, length: 8, minimum: 0, maximum: 1}
+      - {name: error_register, start: 24, length: 8, minimum: 0, maximum: 255}
+  - id: 0x701
+    signals:
+      - {name: nmt_state, start: 0, length: 8, minimum: 0, maximum: 127}
+heartbeats:
+  - {id: 0x701, timeout_ms: 300}
