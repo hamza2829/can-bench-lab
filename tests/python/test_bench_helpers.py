@@ -36,3 +36,14 @@ def test_host_cli_invalid_backend_and_interface():
     assert invalid.returncode == 2 and 'Usage:' in invalid.stderr
     invalid = subprocess.run(['build/can_node', '--socketcan', 'missing-interface-too-long'], capture_output=True, text=True)
     assert invalid.returncode == 1 and 'Cannot open' in invalid.stderr
+
+
+def test_memory_parser_rejects_invalid_and_overflowing_tokens():
+    node = NodeBench(Path('build/can_node'))
+    try:
+        for command in ('T nope', 'T -1', 'T 4294967296', 'T 1 trailing',
+                        'F 001 1 GG', 'F 001 1 1G', 'F 001 1 00 extra', 'F 001 4294967296'):
+            assert node._exchange(command) < 0, command
+        assert node._exchange('F 123 0') == 0
+    finally:
+        node.close()

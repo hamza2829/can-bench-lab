@@ -1,9 +1,10 @@
 #include "canlab.h"
 #include "canlab_socketcan.h"
 #include <ctype.h>
-#include <inttypes.h>
+#include <errno.h>
 #include <poll.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -24,28 +25,62 @@ static void drain(cb_memory_endpoint *endpoint) {
     }
 }
 
+static const char *skip_space(const char *cursor) {
+    while (isspace((unsigned char)*cursor)) { ++cursor; }
+    return cursor;
+}
+
+static cb_result number(const char **cursor, int base, uint32_t maximum, uint32_t *value) {
+    const char *start = skip_space(*cursor);
+    char *end = NULL;
+    unsigned long parsed;
+    if (*start == '-' || *start == '+') { return CB_ARG; }
+    errno = 0;
+    parsed = strtoul(start, &end, base);
+    if (end == start || (*end != '\0' && !isspace((unsigned char)*end))) { return CB_ARG; }
+    if (errno == ERANGE || parsed > maximum) { return CB_RANGE; }
+    *value = (uint32_t)parsed;
+    *cursor = end;
+    return CB_OK;
+}
+
+static uint8_t hex_digit(char character) {
+    if (character >= '0' && character <= '9') { return (uint8_t)(character - '0'); }
+    return (uint8_t)(tolower((unsigned char)character) - 'a' + 10);
+}
+
 static cb_result memory_command(const char *line, cb_memory_endpoint *client, cb_node *node, uint32_t *now_ms) {
-    unsigned id = 0U;
-    unsigned dlc = 0U;
-    char hex[18] = {0};
+    uint32_t id = 0U;
+    uint32_t dlc = 0U;
+    const char *cursor = line + 1;
     uint32_t next_time = 0U;
-    if (sscanf(line, "T %" SCNu32, &next_time) == 1) {
-        cb_result result = cb_node_poll(node, next_time);
+    if (line[0] == 'T' && isspace((unsigned char)line[1])) {
+        cb_result result = number(&cursor, 10, UINT32_MAX, &next_time);
+        if (result != CB_OK) { return result; }
+        if (*skip_space(cursor) != '\0') { return CB_ARG; }
+        result = cb_node_poll(node, next_time);
         if (result != CB_TIME) { *now_ms = next_time; }
         return result;
     }
-    if (sscanf(line, "F %x %u %17s", &id, &dlc, hex) >= 2) {
+    if (line[0] == 'F' && isspace((unsigned char)line[1])) {
         cb_frame frame = {0};
+        const char *hex;
+        size_t hex_length;
+        cb_result parsed;
         unsigned i;
-        if (id > 0x7FFU) { return CB_RANGE; }
-        if (dlc > 8U || strlen(hex) != dlc * 2U) { return CB_LENGTH; }
+        parsed = number(&cursor, 16, 0x7FFU, &id);
+        if (parsed != CB_OK) { return parsed; }
+        parsed = number(&cursor, 10, UINT32_MAX, &dlc);
+        if (parsed != CB_OK) { return parsed; }
+        hex = skip_space(cursor);
+        hex_length = strcspn(hex, " \t\r\n");
+        if (dlc > 8U || hex_length != dlc * 2U) { return CB_LENGTH; }
+        if (*skip_space(hex + hex_length) != '\0') { return CB_ARG; }
         frame.id = (uint16_t)id;
         frame.dlc = (uint8_t)dlc;
         for (i = 0U; i < dlc; ++i) {
-            unsigned value;
             if (!isxdigit((unsigned char)hex[2U * i]) || !isxdigit((unsigned char)hex[2U * i + 1U])) { return CB_ARG; }
-            if (sscanf(hex + 2U * i, "%2x", &value) != 1) { return CB_ARG; }
-            frame.data[i] = (uint8_t)value;
+            frame.data[i] = (uint8_t)((hex_digit(hex[2U * i]) << 4U) | hex_digit(hex[2U * i + 1U]));
         }
         {
             cb_result result = cb_memory_send(client, &frame);
@@ -66,12 +101,17 @@ int main(int argc, char **argv) {
     uint32_t now_ms = socket_mode ? clock_ms() : 0U;
     char line[128];
     if (!socket_mode && !(argc == 2 && strcmp(argv[1], "--memory") == 0)) {
-        (void)fprintf(stderr, "Usage: can_node --memory | --socketcan INTERFACE\n");
+        (void)fputs("Usage: can_node --memory | --socketcan INTERFACE\n", stderr);
         return 2;
     }
     cb_memory_init(&memory);
     if (socket_mode) {
-        if (cb_socketcan_open(&socket_bus, argv[2]) != CB_OK) { (void)fprintf(stderr, "Cannot open SocketCAN interface %s\n", argv[2]); return 1; }
+        if (cb_socketcan_open(&socket_bus, argv[2]) != CB_OK) {
+            (void)fputs("Cannot open SocketCAN interface ", stderr);
+            (void)fputs(argv[2], stderr);
+            (void)fputc('\n', stderr);
+            return 1;
+        }
         hal = cb_socketcan_hal(&socket_bus);
     } else { hal = cb_memory_hal(&node_endpoint); }
     if (cb_node_init(&node, 1U, hal, now_ms) != CB_OK || cb_node_start(&node) != CB_OK) {
