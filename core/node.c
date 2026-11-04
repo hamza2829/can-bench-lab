@@ -139,7 +139,6 @@ cb_result cb_node_handle(cb_node *node, const cb_frame *frame, uint32_t now_ms) 
         node->sequence_valid = true;
         node->last_sequence = frame->data[3];
         node->last_command = now_ms;
-        node->last_motion = now_ms;
         return cb_node_tpdo(node);
     }
     return CB_IGNORED;

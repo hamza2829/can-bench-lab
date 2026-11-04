@@ -354,6 +354,17 @@ static void test_watchdog_stops_and_latches_error(void) {
     TEST_ASSERT_EQUAL(0U, node.objects[3].value);
 }
 
+static void test_command_refresh_preserves_motion_phase(void) {
+    cb_frame frame = command(1000U, 1U, 0U);
+    operational();
+    TEST_ASSERT_EQUAL(CB_OK, cb_node_handle(&node, &frame, 0U));
+    TEST_ASSERT_EQUAL(CB_OK, cb_node_tick(&node, 5U));
+    frame = command(1000U, 1U, 1U);
+    TEST_ASSERT_EQUAL(CB_OK, cb_node_handle(&node, &frame, 5U));
+    TEST_ASSERT_EQUAL(CB_OK, cb_node_tick(&node, 10U));
+    TEST_ASSERT_EQUAL(1U, node.objects[3].value);
+}
+
 static void test_checksum_and_length_faults(void) {
     cb_frame frame = command(500U, 1U, 0U);
     operational();
@@ -442,6 +453,7 @@ int main(void) {
     RUN_TEST(test_mapping_more_than_eight_bytes);
     RUN_TEST(test_lifter_position_and_target_stop);
     RUN_TEST(test_watchdog_stops_and_latches_error);
+    RUN_TEST(test_command_refresh_preserves_motion_phase);
     RUN_TEST(test_checksum_and_length_faults);
     RUN_TEST(test_sequence_gap_replay_and_wrap);
     RUN_TEST(test_out_of_range_pdo_is_atomic);

@@ -40,7 +40,7 @@ uint32_t cb_od_write(cb_node *node, uint16_t index, uint8_t subindex, uint8_t si
     if (index == 0x2004U) {
         if (value == 1U) { node->objects[1].value = 0U; node->sequence_valid = false; }
     } else {
-        if (index == 0x2002U && value == 1U) { node->last_motion = now_ms; }
+        if (index == 0x2002U && value == 1U && object->value == 0U) { node->last_motion = now_ms; }
         object->value = value;
     }
     if (index == 0x2001U || index == 0x2002U) { node->last_command = now_ms; }
