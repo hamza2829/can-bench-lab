@@ -70,7 +70,7 @@ Motion is simulated at one millimetre per 10 ms toward the target and stops at t
 
 CI attempts `sudo modprobe vcan`, `sudo ip link add vcan0 type vcan`, and `sudo ip link set vcan0 up`. A native CAN RAW socket must open before SocketCAN tests are selected. Memory tests always run. If the runner cannot provide `vcan0`, CI records the actual commands and failures in `backend.json`, selects the memory backend, and runs no SocketCAN bench cases. This is a reported fallback, not a SocketCAN pass or a skipped test reported as success.
 
-The actual backend selected by the completed CI run will be recorded here after measurement.
+In the verified [CI run 41933489968](https://github.com/hamza2829/can-bench-lab/actions/runs/41933489968), all three setup commands returned zero, `vcan0` opened successfully, and all 12 SocketCAN process-bench cases passed. All 12 memory-bus cases also passed. No fallback was used in that run. Future runners can still select the recorded memory fallback if their kernel cannot provide `vcan0`.
 
 ## Log tools and diagnosis
 
@@ -78,15 +78,33 @@ The decoder accepts numeric-timestamp candump lines in compact `ID#HEX` or brack
 
 Statistics include counts, message rate, interval mean, population standard deviation of intervals as jitter, error-frame count, and estimated bus load. Rate is count divided by the whole observed capture span. Bus load uses 47 frame and intermission bits plus payload bits, with a no-stuffing lower bound and a worst-case stuffing upper bound. Error-frame occupancy, retransmissions, and unlogged traffic are excluded. A single-frame or zero-duration capture has no rate or load estimate. `vcan` has no physical bus bitrate or arbitration delay, so these values are estimates from timestamps and configured nominal bitrate.
 
-Diagnosis checks configured heartbeat gaps inside the capture window, SDO abort responses, short application payloads, and decoded signal ranges. It cannot infer silence after the final logged frame. The synthetic fault log deliberately contains several problems. Its actual diagnosis output will be copied here after CI checks it.
+Diagnosis checks configured heartbeat gaps inside the capture window, SDO abort responses, short application payloads, and decoded signal ranges. It cannot infer silence after the final logged frame. The synthetic fault log produced these four findings in the verified CI run:
+
+```text
+0.350000s: SDO abort 0x06090030 at 0x2001:00: value outside allowed range
+0.400000s: position out of range: 2000 mm
+0.450000s: CAN error frame 0x00000004
+Missing heartbeat 0x701: observed gap 900.0 ms exceeds 300 ms within capture
+```
+
+The capture contains seven frames over one second. At the configured nominal 500 kbit/s, the reported data/RTR load estimate is 0.096% to 0.116%. The separately analyzed actual memory motion-test trace produced zero configured findings. Both plots and reports are in the CI artifact.
 
 ## Measured CI results
 
 <!-- CI_METRICS_START -->
 | Metric | Measured in CI |
-| --- | --- |
-| Tests and coverage | Awaiting the first completed CI run |
+| --- | ---: |
+| C Unity cases | 27 |
+| Python pytest cases, including bench | 88 |
+| Unique total | 115 |
+| Memory / SocketCAN bench cases, included above | 12 / 12 |
+| C cases rerun with ASan and UBSan, not added to total | 27 |
+| Failures / ignored / skipped | 0 / 0 / 0 |
+| C core line coverage | 100.00% (289/289) |
+| Python line coverage | 96.50% (414/429) |
 <!-- CI_METRICS_END -->
+
+Measured in [CI run 41933489968](https://github.com/hamza2829/can-bench-lab/actions/runs/41933489968) for commit `690c04226a21e2f6a88273736030eb4c43ba072a`. The strict pipeline and per-file analyzer failure handling were active. Compiler, cppcheck, clang-tidy, ASan, and UBSan logs contained no diagnostics for the owned code in that run. This is line coverage, not a claim of complete branch coverage or proof of correctness.
 
 The measured C case count comes from Unity's actual summary, not CTest's count of one harness. The same cases are rerun with AddressSanitizer and UndefinedBehaviorSanitizer and counted once in the unique total. Python counts include parameterized process-bench invocations. C core line coverage includes all four production files in `core/`, measured with gcov through gcovr after unit and bench execution. The kernel backend, host CLI, tests, and fetched Unity sources are outside that core coverage scope. Python coverage is reported separately.
 
