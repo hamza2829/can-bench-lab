@@ -9,6 +9,9 @@ jobs:
   build-test-analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,7 +35,7 @@ jobs:
       - name: Static analysis with clang-tidy
         run: |
           for source in core/*.c backends/*.c app/*.c; do
-            clang-tidy --quiet -p build "$source" --warnings-as-errors='*'
+            clang-tidy --quiet -p build "$source" --warnings-as-errors='*' || exit 1
           done 2>&1 | tee artifacts/clang-tidy.log
       - name: Build and test with AddressSanitizer and UndefinedBehaviorSanitizer
         env:

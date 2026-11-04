@@ -1,5 +1,4 @@
 #include "canlab.h"
-#include <string.h>
 
 static cb_result heartbeat(cb_node *node, uint8_t state) {
     cb_frame frame = {(uint16_t)(0x700U + node->node_id), 1U, {0}};
@@ -8,6 +7,7 @@ static cb_result heartbeat(cb_node *node, uint8_t state) {
 }
 
 cb_result cb_node_init(cb_node *node, uint8_t id, cb_hal hal, uint32_t now_ms) {
+    size_t i;
     static const cb_object defaults[CB_OD_COUNT] = {
         {0x1000U, 4U, CB_OD_READ, 0U, 0U, UINT32_MAX},
         {0x1001U, 1U, CB_OD_READ | CB_OD_TPDO, 0U, 0U, 255U},
@@ -19,14 +19,14 @@ cb_result cb_node_init(cb_node *node, uint8_t id, cb_hal hal, uint32_t now_ms) {
         {0x2004U, 1U, CB_OD_READ | CB_OD_WRITE, 0U, 0U, 1U}
     };
     if (node == NULL || id == 0U || id > 127U || hal.send == NULL || hal.receive == NULL) { return CB_ARG; }
-    memset(node, 0, sizeof(*node));
+    *node = (cb_node){0};
     node->node_id = id;
     node->hal = hal;
     node->last_tick = now_ms;
     node->last_motion = now_ms;
     node->last_command = now_ms;
     node->last_heartbeat = now_ms;
-    memcpy(node->objects, defaults, sizeof(defaults));
+    for (i = 0U; i < CB_OD_COUNT; ++i) { node->objects[i] = defaults[i]; }
     node->rpdo = (cb_pdo_map){(uint16_t)(0x200U + id), 2U, {{0x2001U, 0U, 16U}, {0x2002U, 0U, 8U}, {0}, {0}}};
     node->tpdo = (cb_pdo_map){(uint16_t)(0x180U + id), 3U, {{0x2000U, 0U, 16U}, {0x2002U, 0U, 8U}, {0x1001U, 0U, 8U}, {0}}};
     return CB_OK;

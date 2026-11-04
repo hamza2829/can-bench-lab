@@ -1,8 +1,7 @@
 #include "canlab.h"
-#include <string.h>
 
 void cb_memory_init(cb_memory_bus *bus) {
-    if (bus != NULL) { memset(bus, 0, sizeof(*bus)); }
+    if (bus != NULL) { *bus = (cb_memory_bus){0}; }
 }
 
 cb_hal cb_memory_hal(cb_memory_endpoint *endpoint) {
